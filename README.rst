@@ -26,7 +26,7 @@ Installation Guide
 1
 _
 
-Edit set-env.sh, you probably want to:
+First edit set-env.sh:
 
 * replace domain.com with your domain
 * add your subdomains, which you want to route with nginx presented within this container bundle, to HOSTS variable
