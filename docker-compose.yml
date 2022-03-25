@@ -1,0 +1,97 @@
+version: "3"
+
+networks:
+  matrix_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.10.0/24
+
+services:
+  traefik:
+    image: traefik:v2.3
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik/traefik.toml:/etc/traefik/traefik.toml:ro"
+      - "./traefik/acme.json:/acme.json"
+      - "./traefik/config:/config:ro"
+    networks:
+      matrix_net:
+    container_name: proxy
+
+  nginx:
+    image: nginx
+    restart: unless-stopped
+    volumes:
+      - "./nginx/matrix.conf:/etc/nginx/conf.d/matrix.conf"
+      - "./nginx/riot/riot-web:/usr/share/nginx/html/"
+      - "./nginx/riot/config/config.json:/usr/share/nginx/html/config.json"
+      - "./nginx/www:/var/www"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx.rule=$HOSTS"
+      - "traefik.http.routers.nginx.entrypoints=web"
+      - "traefik.http.services.nginx.loadbalancer.passhostheader=true"
+      - "traefik.http.middlewares.nginx-redirect-websecure.redirectscheme.scheme=https"
+      - "traefik.http.routers.nginx.middlewares=nginx-redirect-websecure"
+      - "traefik.http.routers.nginx-websecure.rule=$HOSTS"
+      - "traefik.http.routers.nginx-websecure.entrypoints=websecure"
+      - "traefik.http.routers.nginx-websecure.tls=true"
+      - "traefik.http.routers.nginx-websecure.tls.certresolver=letsencrypt"
+    depends_on:
+      - traefik
+    networks:
+      matrix_net:
+    container_name: nginx
+
+  db:
+    container_name: postgres
+    build:
+      context: postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - matrix_net
+    labels:
+      - "traefik.enable=false"
+
+  synapse:
+    image: matrixdotorg/synapse
+    restart: unless-stopped
+    volumes:
+      - ./synapse:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.synapse.rule=Host($MY_DOMAIN_SYN)"
+      - "traefik.http.services.synapse.loadbalancer.server.port=8008"
+      - "traefik.http.middlewares.synapse-redirect-websecure.redirectscheme.scheme=https"
+      - "traefik.http.routers.synapse.middlewares=synapse-redirect-websecure"
+      - "traefik.http.routers.synapse-websecure.rule=Host($MY_DOMAIN_SYN)"
+      - "traefik.http.routers.synapse-websecure.tls=true"
+      - "traefik.http.routers.synapse-websecure.entrypoints=websecure"
+      - "traefik.http.routers.synapse-websecure.tls.certresolver=letsencrypt"
+    networks:
+      - matrix_net
+
+  coturn:
+    container_name: coturn
+    image: instrumentisto/coturn
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
+      - CERTS_DIR:/etc/certs
+      - ./coturn/pcap:/tmp
+
+volumes:
+  postgres-data:

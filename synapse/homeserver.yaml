@@ -1,0 +1,37 @@
+server_name: "matrix.startech.live"
+use_presence: true
+report_stats: false
+media_store_path: "/data/media_store"
+uploads_path: "/data/uploads"
+listeners:
+  - port: 8008
+    tls: false
+    bind_addresses: ['0.0.0.0']
+    type: http
+    x_forwarded: true
+
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: SomeMassivelyLongPassword
+    database: matrix
+    host: postgres
+
+enable_registration: true
+
+max_upload_size: "100M"
+
+## Turn ##
+turn_uris: [ "turn:`turn.matrix.startech.live`?transport=tcp",
+#             "turn:`turn.matrix.startech.live`?transport=udp",
+              "turns:`turn.matrix.startech.live`?transport=tcp"]
+#             "turns:`turn.matrix.startech.live`?transport=udp"] # , "turns:`turn.matrix.startech.live`?transport=tcp"
+turn_shared_secret: "AgainCreatedByAPasswordGenerator"
+turn_user_lifetime: 86400000
+turn_allow_guests: true
+
